@@ -33,6 +33,8 @@ class IndexScanExecutor : public AbstractExecutor {
    * @param exec_ctx the executor context
    * @param plan the index scan plan to be executed
    */
+  using BPlusTreeIndexType =  BPlusTreeIndex<GenericKey<8>, RID, GenericComparator<8>>;
+  using IndexIteratorType = IndexIterator<GenericKey<8>, RID, GenericComparator<8>>;
   IndexScanExecutor(ExecutorContext *exec_ctx, const IndexScanPlanNode *plan);
 
   const Schema *GetOutputSchema() override { return plan_->OutputSchema(); };
@@ -44,5 +46,11 @@ class IndexScanExecutor : public AbstractExecutor {
  private:
   /** The index scan plan node to be executed. */
   const IndexScanPlanNode *plan_;
+  IndexInfo* index_info_;
+  BPlusTreeIndexType* index_;
+  TableHeap* table_heap_;
+  TableMetadata* table_info_;
+  IndexIteratorType iter_;
+
 };
 }  // namespace bustub

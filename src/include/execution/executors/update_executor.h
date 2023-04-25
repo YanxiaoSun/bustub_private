@@ -46,6 +46,8 @@ class UpdateExecutor : public AbstractExecutor {
 
   bool Next([[maybe_unused]] Tuple *tuple, RID *rid) override;
 
+  void update(Tuple* tuple, RID* rid);
+
   /*
    * Given an old tuple, creates a new updated tuple based on the updateinfo given in the plan
    * @param old_tup the tuple to be updated

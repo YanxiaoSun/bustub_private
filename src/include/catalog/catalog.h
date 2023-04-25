@@ -77,14 +77,26 @@ class Catalog {
    */
   TableMetadata *CreateTable(Transaction *txn, const std::string &table_name, const Schema &schema) {
     BUSTUB_ASSERT(names_.count(table_name) == 0, "Table names should be unique!");
-    return nullptr;
+    auto table_id = next_table_oid_++;
+    names_[table_name] = table_id;
+    TableHeap* table_ = new TableHeap(bpm_, lock_manager_, log_manager_, txn);
+    auto new_table = new TableMetadata(schema, table_name, static_cast<std::unique_ptr<TableHeap>>(table_), table_id);
+    tables_[table_id] = static_cast<std::unique_ptr<TableMetadata>>(new_table);
+    return  new_table;
   }
 
   /** @return table metadata by name */
-  TableMetadata *GetTable(const std::string &table_name) { return nullptr; }
+  TableMetadata *GetTable(const std::string &table_name) {
+    if(!names_.count(table_name)){
+      throw std::out_of_range(table_name);
+    }
+    auto table_id = names_[table_name];
+    return tables_[table_id].get();
+
+  }
 
   /** @return table metadata by oid */
-  TableMetadata *GetTable(table_oid_t table_oid) { return nullptr; }
+  TableMetadata *GetTable(table_oid_t table_oid) { return tables_[table_oid].get(); }
 
   /**
    * Create a new index, populate existing data of the table and return its metadata.
@@ -101,14 +113,44 @@ class Catalog {
   IndexInfo *CreateIndex(Transaction *txn, const std::string &index_name, const std::string &table_name,
                          const Schema &schema, const Schema &key_schema, const std::vector<uint32_t> &key_attrs,
                          size_t keysize) {
-    return nullptr;
+    auto index_id = ++next_index_oid_;
+    auto index_metadata = new IndexMetadata(index_name, table_name, &schema, key_attrs);
+    std::unique_ptr<Index> BPlusTree_index(new BPlusTreeIndex<KeyType, ValueType, KeyComparator>(index_metadata, bpm_));
+    IndexInfo* new_index = new IndexInfo(key_schema, table_name, std::move(BPlusTree_index), index_id, table_name, keysize);
+    indexes_[index_id] = static_cast<std::unique_ptr<IndexInfo>>(new_index);
+    index_names_[table_name].insert(std::pair<std::string, index_oid_t>(index_name, index_id));
+    auto table = GetTable(table_name)->table_.get();
+
+    for(auto it  = table->Begin(txn); it != table->End(); ++it){
+      new_index->index_->InsertEntry(it->KeyFromTuple(schema, key_schema, key_attrs), it->GetRid(), txn);
+    }
+    return new_index;
   }
 
-  IndexInfo *GetIndex(const std::string &index_name, const std::string &table_name) { return nullptr; }
+  IndexInfo *GetIndex(const std::string &index_name, const std::string &table_name) {
+   /*if(!index_names_.count(index_name)){
+      throw std::out_of_range(index_name);
+    }*/
+    index_oid_t index_id = index_names_[table_name][index_name];
+    return indexes_[index_id].get();
+  }
 
-  IndexInfo *GetIndex(index_oid_t index_oid) { return nullptr; }
+  IndexInfo *GetIndex(index_oid_t index_oid) {
+    return indexes_[index_oid].get();
+  }
 
-  std::vector<IndexInfo *> GetTableIndexes(const std::string &table_name) { return std::vector<IndexInfo *>(); }
+  std::vector<IndexInfo *> GetTableIndexes(const std::string &table_name) {
+    std::vector<IndexInfo *> ans {};
+    /*if(!index_names_.count(table_name)){
+      throw std::out_of_range("GetTableIndexes error!");
+    }*/
+    auto index_set = index_names_[table_name];
+    for(const auto& [key, value] : index_set ){
+      IndexInfo* index_info_ptr = indexes_[value].get();
+      ans.push_back(index_info_ptr);
+    }
+    return ans;
+  }
 
  private:
   [[maybe_unused]] BufferPoolManager *bpm_;
